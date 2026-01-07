@@ -662,7 +662,272 @@ class CatMoodTestApp:
         """
         self.window.mainloop()
 
+# ============================================================
+# ФУНКЦИИ ПРОВЕРКИ ТАРО
+# ============================================================
+class Deck:
 
+    BASEPATH = 'images/tarot/png/'
+
+    def __init__(self):
+        import json
+        
+        with open('markup.json', 'r') as markup_file:
+            markup = json.load(markup_file)
+
+        self.cards = []
+
+        for i in markup:
+            self.cards.append(TarotCard(i['name'], i['id'], self.BASEPATH + i['name'] + '.png'))
+    
+    def pull_card(self):
+        import random
+
+        card = random.choice(self.cards)
+        self.cards.remove(card)
+        return card
+
+class TarotCard:
+
+    def __init__(self, name, value, image_path):
+        self.name = name
+        self.value = value
+        self.image_path = image_path
+
+def get_prediction(cards):
+    import requests
+    import base64
+
+    auth = "Basic " + base64.b64encode("649129:12788919b4c04b4ce2ddd4c31b36260a2aecf2d9".encode()).decode()
+
+    r = requests.post("https://json.astrologyapi.com/v1/tarot_predictions", 
+        headers = {
+            'Authorization': auth,
+            'Content-Type': 'application/json'
+        },
+        params = {
+            'love': cards[0].value,
+            'career': cards[1].value,
+            'finance': cards[2].value
+        })
+
+    return r.json()
+
+class Layout:
+
+    def __init__(self, cards = {}):
+        self.cards = cards
+
+    def append_card(self, theme, card):
+        self.cards[theme] = card
+
+class TarotApp:
+    from PIL import Image, ImageTk
+
+    """
+    Проверка расклада таро
+    """
+
+    def __init__(self, root):
+        """
+        Конструктор - вызывается при создании объекта.
+        Здесь мы настраиваем главное окно приложения.
+        """
+        # Создаём главное окно
+        self.root = root
+        self.root.title("Расклад таро")
+        self.root.geometry("1000x1000")  # ширина x высота в пикселях
+        self.root.configure(bg="#1a1a2e")  # тёмный фон
+
+        # Запрещаем изменять размер окна (чтобы не ломался дизайн)
+        self.root.resizable(False, False)
+
+        self.main_frame = tk.Frame(self.root, bg="#1a1a2e")
+        self.main_frame.pack(fill="both", expand=True, padx=20, pady=20)
+
+
+        self.deck = Deck()
+
+        # Показываем стартовый экран
+        self.show_start_screen()
+
+    def clear_screen(self):
+        """
+        Очищает экран - удаляет все элементы из main_frame.
+        Вызываем перед показом нового экрана.
+        """
+        # Проходим по всем дочерним элементам и удаляем их
+        for widget in self.main_frame.winfo_children():
+            widget.destroy()
+
+    def run(self):
+        """
+        Запускает приложение.
+        mainloop() - это бесконечный цикл, который ждёт действий пользователя.
+        """
+        self.root.mainloop()
+
+    def show_start_screen(self):
+        """
+        Главное окно с предложением расклада
+        """
+        # Сначала очищаем экран
+        self.clear_screen()
+
+        # --- Заголовок ---
+        title_label = tk.Label(
+            self.main_frame,
+            text="Сделаем расклад таро?",
+            font=("Arial", 24, "bold"),
+            fg="#e94560",  # розовый цвет текста
+            bg="#1a1a2e"  # фон как у родителя
+        )
+        title_label.pack(pady=40)  # pady - отступ сверху и снизу
+
+        # --- Описание ---
+        description = (
+            "Попроси разложить карты таро"
+            "и узнай, что тебя ждет в жизни"
+        )
+        desc_label = tk.Label(
+            self.main_frame,
+            text=description,
+            font=("Arial", 14),
+            fg="#ffffff",
+            bg="#1a1a2e",
+            justify="center"  # выравнивание текста по центру
+        )
+        desc_label.pack(pady=30)
+
+        # --- Кнопка "Начать тест" ---
+        start_button = tk.Button(
+            self.main_frame,
+            text="✨ Начать расклад ✨",
+            font=("Arial", 16, "bold"),
+            fg="#ffffff",
+            bg="#e94560",
+            activebackground="#ff6b6b",  # цвет при нажатии
+            activeforeground="#ffffff",
+            width=20,
+            height=2,
+            border=0,
+            cursor="hand2",  # курсор-рука при наведении
+            command=self.start_test  # функция, которая вызовется при клике
+        )
+        start_button.pack(pady=40)  
+    
+    def start_test(self):
+        self.clear_screen()
+
+        self.canvas = tk.Canvas(self.main_frame, bg="#1a1a2e", highlightthickness=0, borderwidth=0, relief='flat')
+        self.canvas.pack(fill=tk.BOTH, expand=True)
+        
+        # Загрузка первой картинки (колода)
+        img = Image.open('./images/tarot/png/back.png')
+        img = img.resize((200, 378), Image.Resampling.LANCZOS)
+        self.deck_img = ImageTk.PhotoImage(img)
+        self.deck_draw = self.canvas.create_image(150, 200, image=self.deck_img)
+
+        self.card_images = {}  # словарь для хранения изображений
+        self.cards_for_prediction = []
+        
+        for i in range(1, 4):
+            drawn_card = self.deck.pull_card()
+            self.cards_for_prediction.append(drawn_card)
+
+            print(f"Карта {i}: {drawn_card.image_path}")
+            
+            img = Image.open(drawn_card.image_path)
+            img = img.resize((200, 378), Image.Resampling.LANCZOS)
+            card_img = ImageTk.PhotoImage(img)
+            
+            self.card_images[f"card_{i}"] = card_img  # сохраняем в словарь
+            self.canvas.create_image(i * 200 + 50 * i, 600, image=card_img)
+
+        
+        # self.prediction = get_prediction((self.cards_for_prediction))
+        # Для тестирования
+        self.prediction = {'love': 'The singles and eligible may find love interest at their work place. You may be attracted to a married person who may not reveal his marital status to you. Some background search will help. You may come across someone you will seem to be a perfect match for you; who will revere you and respect you for who you are. This may prove to be a very passionate phase in your love life. Emotions shall be on a roller coaster; desires and urges shall climax.  Your love feelings shall be positively reciprocated in a big way! If you have been facing problems in your relationships, today is the day to use your communicative skills effectively and clear all differences. Your soothing words will bring the other person around to see and understand your point of view. You may look to introduce some fun elements in your relationship. You can plan an adventurous trip to an exotic place or indulge in some energetic, outdoor sports such as paragliding. You can set out to explore new unvisited places of interest. Be careful not to be so lost in your love life that you ignore other important aspect of your life.', 'career': 'Time is ripe to put your best foot forward. Your ambitious and farsighted vision will help you achieve your goals today. You shall come up with decisive suggestions which will have long term impact. Many possibilities will open up before you. You shall be able to make the right choices with a clear mind and a positive self-righteousness. You will come across as a creative and formidable force. You will come across as creative, passionate and energetic person. You may be offered a new job or increased responsibilities today. You shall get ample opportunities to prove your work capabilities. You will make outstanding progress at work and win accolades and promotions. Those who are stuck up in a stagnant job may decide to opt out and look for more challenging openings. If you have been thinking to be self-employed, then this may turn out to be just the right career choice for you. It is time to implement any new business strategy you might have and take control of your business dealings. You shall benefit from the advice given by an experienced person. Explore your options, dream big and try new things, but remember, you shall alone be responsible and accountable for your actions and decisions.', 'finance': 'This may be an exceptionally rewarding and profitable period for you. A new job may be offered to you. You may get a chance to work with an experienced person who will mentor you in the new occupation. You would be able to learn many new tricks of trade from him. You shall get enough opportunities prove your mettle in your area of expertise. You shall be able to complete your assignments successfully and this may find expression in form of a promotion or elevated status. You are all set to take risks and invest in ventures which you think will yield you abundant returns. In case you are facing a financial crunch, you may look out for an additional source or means of earning income. It might as well be trading or commission related work. Any work which gives you monetary freedom is fine to you. A newly discovered talent can be put to professional practice. A windfall gain is possible. Freshers from college may decide to venture into business. Businessmen may come up with new offers to attract customers and thereby increase their sales and revenues. You may proceed with new projects, fresh investments, etc.'}
+        # print(get_prediction(self.cards_for_prediction))
+
+        self.text_widget = tk.Text(
+            self.canvas,
+            height=20,
+            width=70,
+            wrap="word",
+            bg="#1a1a2e",
+            fg="white"
+        )
+
+        self.text_window = self.canvas.create_window(550, 190, window=self.text_widget)
+
+        button_frame = tk.Frame(self.canvas, bg="#1a1a2e")
+    
+        # Создаем кнопки внутри Frame
+        button1 = tk.Button(
+            button_frame,
+            text="Что меня ждет в личной жизни?",
+            font=("Arial", 12, "bold"),
+            fg="#ffffff",
+            bg="#e94560",
+            width=15,
+            height=2,
+            command=lambda: self.update_text(self.prediction['love']),
+            justify="center",
+            wraplength=150
+        )
+        
+        button2 = tk.Button(
+            button_frame,
+            text="Что меня ждет в карьере?",
+            font=("Arial", 12, "bold"),
+            fg="#ffffff",
+            bg="#e94560",
+            width=15,
+            height=2,
+            command=lambda: self.update_text(self.prediction['career']),
+            justify="center",
+            wraplength=150
+        )
+        
+        button3 = tk.Button(
+            button_frame,
+            text="Что меня ждет в финансах?",
+            font=("Arial", 12, "bold"),
+            fg="#ffffff",
+            bg="#e94560",
+            width=15,
+            height=2,
+            command=lambda: self.update_text(self.prediction['finance']),
+            justify="center",
+            wraplength=150
+        )
+        
+        # Размещаем кнопки в Frame горизонтально
+        button1.pack(side="left", padx=45, pady=5)
+        button2.pack(side="left", padx=45, pady=5)
+        button3.pack(side="left", padx=45, pady=5)
+
+        self.button_frame_window = self.canvas.create_window(
+            500,      # по центру
+            850,    # снизу
+            window=button_frame
+        )
+
+
+    def update_text(self, new_text):
+        print("EXECUTED")
+        # Включаем редактирование
+        self.text_widget.config(state="normal")
+        
+        # Очищаем старый текст (от 1.0 до конца)
+        self.text_widget.delete("1.0", "end")
+        
+        # Вставляем новый текст
+        self.text_widget.insert("1.0", new_text)
+        
+        # Отключаем редактирование (если нужно)
+        self.text_widget.config(state="disabled")
 # ============================================================
 # ТОЧКА ВХОДА В ПРОГРАММУ
 # ============================================================
@@ -671,7 +936,9 @@ class CatMoodTestApp:
 # (а не при импорте в другой файл)
 if __name__ == "__main__":
     # Создаём экземпляр приложения
-    app = CatMoodTestApp()
+    # app = CatMoodTestApp()
+    root = tk.Tk()
+    app = TarotApp(root)
 
     # Запускаем приложение
     app.run()

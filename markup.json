@@ -1,0 +1,314 @@
+[
+    {
+        "id": 1,
+        "name": "king_of_wands"
+    },
+    {
+        "id": 2,
+        "name": "queen_of_wands"
+    },
+    {
+        "id": 3,
+        "name": "knight_of_wands"
+    },
+    {
+        "id": 4,
+        "name": "knave_of_wands"
+    },
+    {
+        "id": 5,
+        "name": "ten_of_wands"
+    },
+    {
+        "id": 6,
+        "name": "nine_of_wands"
+    },
+    {
+        "id": 7,
+        "name": "eight_of_wands"
+    },
+    {
+        "id": 8,
+        "name": "seven_of_wands"
+    },
+    {
+        "id": 9,
+        "name": "six_of_wands"
+    },
+    {
+        "id": 10,
+        "name": "five_of_wands"
+    },
+    {
+        "id": 11,
+        "name": "four_of_wands"
+    },
+    {
+        "id": 12,
+        "name": "three_of_wands"
+    },
+    {
+        "id": 13,
+        "name": "two_of_wands"
+    },
+    {
+        "id": 14,
+        "name": "ace_of_wands"
+    },
+    {
+        "id": 15,
+        "name": "king_of_swords"
+    },
+    {
+        "id": 16,
+        "name": "queen_of_swords"
+    },
+    {
+        "id": 17,
+        "name": "knight_of_swords"
+    },
+    {
+        "id": 18,
+        "name": "knave_of_swords"
+    },
+    {
+        "id": 19,
+        "name": "ten_of_swords"
+    },
+    {
+        "id": 20,
+        "name": "nine_of_swords"
+    },
+    {
+        "id": 21,
+        "name": "eight_of_swords"
+    },
+    {
+        "id": 22,
+        "name": "seven_of_swords"
+    },
+    {
+        "id": 23,
+        "name": "six_of_swords"
+    },
+    {
+        "id": 24,
+        "name": "five_of_swords"
+    },
+    {
+        "id": 25,
+        "name": "four_of_swords"
+    },
+    {
+        "id": 26,
+        "name": "three_of_swords"
+    },
+    {
+        "id": 27,
+        "name": "two_of_swords"
+    },
+    {
+        "id": 28,
+        "name": "ace_of_swords"
+    },
+    {
+        "id": 29,
+        "name": "king_of_chalices"
+    },
+    {
+        "id": 30,
+        "name": "queen_of_chalices"
+    },
+    {
+        "id": 31,
+        "name": "knight_of_chalices"
+    },
+    {
+        "id": 32,
+        "name": "knave_of_chalices"
+    },
+    {
+        "id": 33,
+        "name": "ten_of_chalices"
+    },
+    {
+        "id": 34,
+        "name": "nine_of_chalices"
+    },
+    {
+        "id": 35,
+        "name": "eight_of_chalices"
+    },
+    {
+        "id": 36,
+        "name": "seven_of_chalices"
+    },
+    {
+        "id": 37,
+        "name": "six_of_chalices"
+    },
+    {
+        "id": 38,
+        "name": "five_of_chalices"
+    },
+    {
+        "id": 39,
+        "name": "four_of_chalices"
+    },
+    {
+        "id": 40,
+        "name": "three_of_chalices"
+    },
+    {
+        "id": 41,
+        "name": "two_of_chalices"
+    },
+    {
+        "id": 42,
+        "name": "ace_of_chalices"
+    },
+    {
+        "id": 43,
+        "name": "king_of_pentacles"
+    },
+    {
+        "id": 44,
+        "name": "queen_of_pentacles"
+    },
+    {
+        "id": 45,
+        "name": "knight_of_pentacles"
+    },
+    {
+        "id": 46,
+        "name": "knave_of_pentacles"
+    },
+    {
+        "id": 47,
+        "name": "ten_of_pentacles"
+    },
+    {
+        "id": 48,
+        "name": "nine_of_pentacles"
+    },
+    {
+        "id": 49,
+        "name": "eight_of_pentacles"
+    },
+    {
+        "id": 50,
+        "name": "seven_of_pentacles"
+    },
+    {
+        "id": 51,
+        "name": "six_of_pentacles"
+    },
+    {
+        "id": 52,
+        "name": "five_of_pentacles"
+    },
+    {
+        "id": 53,
+        "name": "four_of_pentacles"
+    },
+    {
+        "id": 54,
+        "name": "three_of_pentacles"
+    },
+    {
+        "id": 55,
+        "name": "two_of_pentacles"
+    },
+    {
+        "id": 56,
+        "name": "ace_of_pentacles"
+    },
+    {
+        "id": 57,
+        "name": "the_fool"
+    },
+    {
+        "id": 58,
+        "name": "the_magician"
+    },
+    {
+        "id": 59,
+        "name": "the_high_priestess"
+    },
+    {
+        "id": 60,
+        "name": "the_empress"
+    },
+    {
+        "id": 61,
+        "name": "the_emperor"
+    },
+    {
+        "id": 62,
+        "name": "the_hierophant"
+    },
+    {
+        "id": 63,
+        "name": "the_lovers"
+    },
+    {
+        "id": 64,
+        "name": "the_chariot"
+    },
+    {
+        "id": 65,
+        "name": "strength"
+    },
+    {
+        "id": 66,
+        "name": "the_hermit"
+    },
+    {
+        "id": 67,
+        "name": "the_wheel"
+    },
+    {
+        "id": 68,
+        "name": "justice"
+    },
+    {
+        "id": 69,
+        "name": "the_hanged_man"
+    },
+    {
+        "id": 70,
+        "name": "death"
+    },
+    {
+        "id": 71,
+        "name": "temperance"
+    },
+    {
+        "id": 72,
+        "name": "the_devil"
+    },
+    {
+        "id": 73,
+        "name": "the_tower"
+    },
+    {
+        "id": 74,
+        "name": "the_stars"
+    },
+    {
+        "id": 75,
+        "name": "the_moon"
+    },
+    {
+        "id": 76,
+        "name": "the_sun"
+    },
+    {
+        "id": 77,
+        "name": "judgement"
+    },
+    {
+        "id": 78,
+        "name": "the_world"
+    }
+]
