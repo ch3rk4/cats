@@ -589,7 +589,6 @@ class CatMoodTestApp:
         )
         new_cat_button.pack(side="left", padx=5)
 
-        # Кнопка "Пройти ещё раз"
         retry_button = tk.Button(
             buttons_frame,
             text="🔁 Заново",
@@ -606,7 +605,6 @@ class CatMoodTestApp:
         )
         retry_button.pack(side="left", padx=5)
 
-        # Кнопка "На главную"
         home_button = tk.Button(
             buttons_frame,
             text="🏠 На главную",
@@ -630,25 +628,18 @@ class CatMoodTestApp:
         Параметры:
             image_folder - название папки с картинками (sleepy, happy и т.д.)
         """
-        # Показываем, что идёт загрузка
         self.image_label.config(text="🐱 Ищу котика...", image="")
 
-        # Обновляем интерфейс
         self.window.update()
 
-        # Получаем путь к случайной картинке из папки
         image_path = get_random_local_image(image_folder)
 
         if image_path:
-            # Загружаем изображение
             photo = load_local_image(image_path, max_width=200, max_height=200)
 
             if photo:
-                # Сохраняем ссылку на изображение
-                # Важно! Без этого Python удалит изображение из памяти
                 self.current_photo = photo
 
-                # Отображаем картинку
                 self.image_label.config(image=photo, text="")
             else:
                 self.image_label.config(text="😿 Не удалось загрузить картинку")
@@ -733,22 +724,17 @@ class TarotApp:
         Конструктор - вызывается при создании объекта.
         Здесь мы настраиваем главное окно приложения.
         """
-        # Создаём главное окно
         self.root = root
         self.root.title("Расклад таро")
-        self.root.geometry("1000x1000")  # ширина x высота в пикселях
-        self.root.configure(bg="#1a1a2e")  # тёмный фон
+        self.root.geometry("1000x1000")  
+        self.root.configure(bg="#1a1a2e")  
 
-        # Запрещаем изменять размер окна (чтобы не ломался дизайн)
         self.root.resizable(False, False)
 
         self.main_frame = tk.Frame(self.root, bg="#1a1a2e")
         self.main_frame.pack(fill="both", expand=True, padx=20, pady=20)
 
-
         self.deck = Deck()
-
-        # Показываем стартовый экран
         self.show_start_screen()
 
     def clear_screen(self):
@@ -756,7 +742,6 @@ class TarotApp:
         Очищает экран - удаляет все элементы из main_frame.
         Вызываем перед показом нового экрана.
         """
-        # Проходим по всем дочерним элементам и удаляем их
         for widget in self.main_frame.winfo_children():
             widget.destroy()
 
@@ -771,20 +756,17 @@ class TarotApp:
         """
         Главное окно с предложением расклада
         """
-        # Сначала очищаем экран
         self.clear_screen()
 
-        # --- Заголовок ---
         title_label = tk.Label(
             self.main_frame,
             text="Сделаем расклад таро?",
             font=("Arial", 24, "bold"),
-            fg="#e94560",  # розовый цвет текста
-            bg="#1a1a2e"  # фон как у родителя
+            fg="#e94560",  
+            bg="#1a1a2e"  
         )
-        title_label.pack(pady=40)  # pady - отступ сверху и снизу
+        title_label.pack(pady=40)  
 
-        # --- Описание ---
         description = (
             "Попроси разложить карты таро"
             "и узнай, что тебя ждет в жизни"
@@ -795,7 +777,7 @@ class TarotApp:
             font=("Arial", 14),
             fg="#ffffff",
             bg="#1a1a2e",
-            justify="center"  # выравнивание текста по центру
+            justify="center"  
         )
         desc_label.pack(pady=30)
 
@@ -806,13 +788,13 @@ class TarotApp:
             font=("Arial", 16, "bold"),
             fg="#ffffff",
             bg="#e94560",
-            activebackground="#ff6b6b",  # цвет при нажатии
+            activebackground="#ff6b6b",  
             activeforeground="#ffffff",
             width=20,
             height=2,
             border=0,
-            cursor="hand2",  # курсор-рука при наведении
-            command=self.start_test  # функция, которая вызовется при клике
+            cursor="hand2",  
+            command=self.start_test  
         )
         start_button.pack(pady=40)  
     
@@ -822,33 +804,29 @@ class TarotApp:
         self.canvas = tk.Canvas(self.main_frame, bg="#1a1a2e", highlightthickness=0, borderwidth=0, relief='flat')
         self.canvas.pack(fill=tk.BOTH, expand=True)
         
-        # Загрузка первой картинки (колода)
         img = Image.open('./images/tarot/png/back.png')
         img = img.resize((200, 378), Image.Resampling.LANCZOS)
         self.deck_img = ImageTk.PhotoImage(img)
         self.deck_draw = self.canvas.create_image(150, 200, image=self.deck_img)
 
-        self.card_images = {}  # словарь для хранения изображений
+        self.card_images = {}  
         self.cards_for_prediction = []
         
         for i in range(1, 4):
             drawn_card = self.deck.pull_card()
             self.cards_for_prediction.append(drawn_card)
 
-            print(f"Карта {i}: {drawn_card.image_path}")
-            
             img = Image.open(drawn_card.image_path)
             img = img.resize((200, 378), Image.Resampling.LANCZOS)
             card_img = ImageTk.PhotoImage(img)
             
-            self.card_images[f"card_{i}"] = card_img  # сохраняем в словарь
+            self.card_images[f"card_{i}"] = card_img  
             self.canvas.create_image(i * 200 + 50 * i, 600, image=card_img)
 
         
-        # self.prediction = get_prediction((self.cards_for_prediction))
+        self.prediction = get_prediction((self.cards_for_prediction))
         # Для тестирования
-        self.prediction = {'love': 'The singles and eligible may find love interest at their work place. You may be attracted to a married person who may not reveal his marital status to you. Some background search will help. You may come across someone you will seem to be a perfect match for you; who will revere you and respect you for who you are. This may prove to be a very passionate phase in your love life. Emotions shall be on a roller coaster; desires and urges shall climax.  Your love feelings shall be positively reciprocated in a big way! If you have been facing problems in your relationships, today is the day to use your communicative skills effectively and clear all differences. Your soothing words will bring the other person around to see and understand your point of view. You may look to introduce some fun elements in your relationship. You can plan an adventurous trip to an exotic place or indulge in some energetic, outdoor sports such as paragliding. You can set out to explore new unvisited places of interest. Be careful not to be so lost in your love life that you ignore other important aspect of your life.', 'career': 'Time is ripe to put your best foot forward. Your ambitious and farsighted vision will help you achieve your goals today. You shall come up with decisive suggestions which will have long term impact. Many possibilities will open up before you. You shall be able to make the right choices with a clear mind and a positive self-righteousness. You will come across as a creative and formidable force. You will come across as creative, passionate and energetic person. You may be offered a new job or increased responsibilities today. You shall get ample opportunities to prove your work capabilities. You will make outstanding progress at work and win accolades and promotions. Those who are stuck up in a stagnant job may decide to opt out and look for more challenging openings. If you have been thinking to be self-employed, then this may turn out to be just the right career choice for you. It is time to implement any new business strategy you might have and take control of your business dealings. You shall benefit from the advice given by an experienced person. Explore your options, dream big and try new things, but remember, you shall alone be responsible and accountable for your actions and decisions.', 'finance': 'This may be an exceptionally rewarding and profitable period for you. A new job may be offered to you. You may get a chance to work with an experienced person who will mentor you in the new occupation. You would be able to learn many new tricks of trade from him. You shall get enough opportunities prove your mettle in your area of expertise. You shall be able to complete your assignments successfully and this may find expression in form of a promotion or elevated status. You are all set to take risks and invest in ventures which you think will yield you abundant returns. In case you are facing a financial crunch, you may look out for an additional source or means of earning income. It might as well be trading or commission related work. Any work which gives you monetary freedom is fine to you. A newly discovered talent can be put to professional practice. A windfall gain is possible. Freshers from college may decide to venture into business. Businessmen may come up with new offers to attract customers and thereby increase their sales and revenues. You may proceed with new projects, fresh investments, etc.'}
-        # print(get_prediction(self.cards_for_prediction))
+        # self.prediction = {'love': 'The singles and eligible may find love interest at their work place. You may be attracted to a married person who may not reveal his marital status to you. Some background search will help. You may come across someone you will seem to be a perfect match for you; who will revere you and respect you for who you are. This may prove to be a very passionate phase in your love life. Emotions shall be on a roller coaster; desires and urges shall climax.  Your love feelings shall be positively reciprocated in a big way! If you have been facing problems in your relationships, today is the day to use your communicative skills effectively and clear all differences. Your soothing words will bring the other person around to see and understand your point of view. You may look to introduce some fun elements in your relationship. You can plan an adventurous trip to an exotic place or indulge in some energetic, outdoor sports such as paragliding. You can set out to explore new unvisited places of interest. Be careful not to be so lost in your love life that you ignore other important aspect of your life.', 'career': 'Time is ripe to put your best foot forward. Your ambitious and farsighted vision will help you achieve your goals today. You shall come up with decisive suggestions which will have long term impact. Many possibilities will open up before you. You shall be able to make the right choices with a clear mind and a positive self-righteousness. You will come across as a creative and formidable force. You will come across as creative, passionate and energetic person. You may be offered a new job or increased responsibilities today. You shall get ample opportunities to prove your work capabilities. You will make outstanding progress at work and win accolades and promotions. Those who are stuck up in a stagnant job may decide to opt out and look for more challenging openings. If you have been thinking to be self-employed, then this may turn out to be just the right career choice for you. It is time to implement any new business strategy you might have and take control of your business dealings. You shall benefit from the advice given by an experienced person. Explore your options, dream big and try new things, but remember, you shall alone be responsible and accountable for your actions and decisions.', 'finance': 'This may be an exceptionally rewarding and profitable period for you. A new job may be offered to you. You may get a chance to work with an experienced person who will mentor you in the new occupation. You would be able to learn many new tricks of trade from him. You shall get enough opportunities prove your mettle in your area of expertise. You shall be able to complete your assignments successfully and this may find expression in form of a promotion or elevated status. You are all set to take risks and invest in ventures which you think will yield you abundant returns. In case you are facing a financial crunch, you may look out for an additional source or means of earning income. It might as well be trading or commission related work. Any work which gives you monetary freedom is fine to you. A newly discovered talent can be put to professional practice. A windfall gain is possible. Freshers from college may decide to venture into business. Businessmen may come up with new offers to attract customers and thereby increase their sales and revenues. You may proceed with new projects, fresh investments, etc.'}
 
         self.text_widget = tk.Text(
             self.canvas,
@@ -903,30 +881,21 @@ class TarotApp:
             wraplength=150
         )
         
-        # Размещаем кнопки в Frame горизонтально
         button1.pack(side="left", padx=45, pady=5)
         button2.pack(side="left", padx=45, pady=5)
         button3.pack(side="left", padx=45, pady=5)
 
         self.button_frame_window = self.canvas.create_window(
-            500,      # по центру
-            850,    # снизу
+            500,      
+            850,    
             window=button_frame
         )
 
 
     def update_text(self, new_text):
-        print("EXECUTED")
-        # Включаем редактирование
         self.text_widget.config(state="normal")
-        
-        # Очищаем старый текст (от 1.0 до конца)
         self.text_widget.delete("1.0", "end")
-        
-        # Вставляем новый текст
         self.text_widget.insert("1.0", new_text)
-        
-        # Отключаем редактирование (если нужно)
         self.text_widget.config(state="disabled")
 # ============================================================
 # ТОЧКА ВХОДА В ПРОГРАММУ
