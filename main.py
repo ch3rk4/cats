@@ -372,9 +372,12 @@ class Deck:
 
 def translate_prediction(text):
     import requests
+    from dotenv import load_dotenv, dotenv_values
+    import os
 
-    API_KEY = "AQVN3yWVIZr92CiqzqmvP3xIt8kda048ZaRVXlqY"
-    folderId = "b1gk0k457ga7qrlq8k53"
+    load_dotenv()
+    API_KEY = os.getenv("API_KEY")
+    folderId = os.getenv("folderId")
 
     r = requests.post("https://translate.api.cloud.yandex.net/translate/v2/translate",
         headers = {
