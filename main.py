@@ -370,6 +370,28 @@ class Deck:
         """Сбрасывает колоду (перезагружает карты)."""
         self.__init__()
 
+def translate_prediction(text):
+    import requests
+
+    API_KEY = "AQVN3yWVIZr92CiqzqmvP3xIt8kda048ZaRVXlqY"
+    folderId = "b1gk0k457ga7qrlq8k53"
+
+    r = requests.post("https://translate.api.cloud.yandex.net/translate/v2/translate",
+        headers = {
+            "Authorization": f"Api-Key {API_KEY}",
+            "Content-Type": "application/json"    
+        },
+        json={
+            "folderId": folderId,
+            "texts": [text],
+            "targetLanguageCode": "ru"
+        },
+        timeout=15,
+        verify=False
+    )
+    
+    return r.json()['translations'][0]['text']
+
 
 def get_prediction(cards):
     """Получает предсказание от API."""
@@ -392,9 +414,10 @@ def get_prediction(cards):
                 'career': cards[1].value,
                 'finance': cards[2].value
             },
-            timeout=15
+            timeout=15,
+            verify=False
         )
-        
+    
         return r.json()
     except Exception as e:
         print(f"[API] Ошибка: {e}")
@@ -854,6 +877,14 @@ class MainApp:
         self.window.update()
         
         self.prediction = get_prediction(self.cards_for_prediction)
+        print(self.prediction['love'])
+        self.prediction_love = translate_prediction(self.prediction['love'])
+        self.prediction_career = translate_prediction(self.prediction['career'])
+        self.prediction_finance = translate_prediction(self.prediction['finance'])
+
+        self.prediction = {
+            'love': self.prediction_love, 'career': self.prediction_career, 'finance': self.prediction_finance
+        }
         
         # Сохраняем в базу данных
         self.db.save_tarot_reading(self.cards_for_prediction, self.prediction)
