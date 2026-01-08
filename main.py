@@ -1,39 +1,169 @@
-# ============================================================
-# КОТОГАДАЛКА - Мини-тест "Какой ты кот сегодня?"
-# ============================================================
-# Это приложение с графическим интерфейсом на Tkinter
-# Пользователь отвечает на вопросы и узнаёт, какой он кот
-# ============================================================
+# КОТОГАДАЛКА - Приложение для гаданий
 
-# --- ИСПРАВЛЕНИЕ ДЛЯ WINDOWS + POETRY ---
-# Poetry создаёт виртуальное окружение, которое не видит Tcl/Tk
-# Этот код указывает правильные пути к библиотекам Tcl/Tk
+
 import os
 import sys
 
-# Получаем путь к системному Python (где установлен Tcl/Tk)
 python_dir = sys.base_prefix
-
-# Устанавливаем переменные окружения для Tcl и Tk
 os.environ['TCL_LIBRARY'] = os.path.join(python_dir, 'tcl', 'tcl8.6')
 os.environ['TK_LIBRARY'] = os.path.join(python_dir, 'tcl', 'tk8.6')
 
 # --- ИМПОРТЫ ---
-# tkinter - стандартная библиотека Python для создания окон и кнопок
 import tkinter as tk
-from tkinter import messagebox  # для всплывающих окон с сообщениями
-
-# PIL (Pillow) - для загрузки и отображения изображений в Tkinter
-# Установка: pip install Pillow (или poetry add Pillow)
+from tkinter import messagebox
 from PIL import Image, ImageTk
+import random
+import json
+import sqlite3
+from datetime import datetime
+
 
 # ============================================================
-# ДАННЫЕ ДЛЯ ТЕСТА
+# БАЗА ДАННЫХ (SQLite)
 # ============================================================
 
-# Список вопросов теста
-# Каждый вопрос - это словарь с текстом вопроса и вариантами ответов
-# Каждый вариант ответа содержит текст и количество баллов (score)
+class Database:
+    """
+    Класс для работы с базой данных SQLite.
+    Хранит результаты тестов и раскладов таро.
+    """
+    
+    def __init__(self, db_name="cat_oracle.db"):
+        """
+        Создаёт подключение к базе данных и таблицы.
+        """
+        # Путь к базе данных (рядом со скриптом)
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        self.db_path = os.path.join(script_dir, db_name)
+        
+        # Создаём подключение
+        self.connection = sqlite3.connect(self.db_path)
+        self.cursor = self.connection.cursor()
+        
+        # Создаём таблицы
+        self.create_tables()
+        
+        print(f"[DB] База данных: {self.db_path}")
+    
+    def create_tables(self):
+        """
+        Создаёт таблицы, если они не существуют.
+        """
+        # Таблица для результатов теста настроения
+        self.cursor.execute('''
+            CREATE TABLE IF NOT EXISTS mood_results (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                date TEXT NOT NULL,
+                cat_type TEXT NOT NULL,
+                score INTEGER NOT NULL,
+                answers TEXT
+            )
+        ''')
+        
+        # Таблица для раскладов таро
+        self.cursor.execute('''
+            CREATE TABLE IF NOT EXISTS tarot_readings (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                date TEXT NOT NULL,
+                card1_name TEXT,
+                card2_name TEXT,
+                card3_name TEXT,
+                prediction_love TEXT,
+                prediction_career TEXT,
+                prediction_finance TEXT
+            )
+        ''')
+        
+        self.connection.commit()
+        print("[DB] Таблицы созданы")
+    
+    def save_mood_result(self, cat_type, score, answers):
+        """
+        Сохраняет результат теста настроения.
+        """
+        date = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        answers_str = ",".join(map(str, answers))
+        
+        self.cursor.execute('''
+            INSERT INTO mood_results (date, cat_type, score, answers)
+            VALUES (?, ?, ?, ?)
+        ''', (date, cat_type, score, answers_str))
+        
+        self.connection.commit()
+        print(f"[DB] Сохранён результат теста: {cat_type}")
+    
+    def save_tarot_reading(self, cards, prediction):
+        """
+        Сохраняет расклад таро.
+        """
+        date = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        
+        # Получаем имена карт
+        card_names = [card.name if card else "" for card in cards]
+        while len(card_names) < 3:
+            card_names.append("")
+        
+        self.cursor.execute('''
+            INSERT INTO tarot_readings 
+            (date, card1_name, card2_name, card3_name, 
+             prediction_love, prediction_career, prediction_finance)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        ''', (
+            date, 
+            card_names[0], card_names[1], card_names[2],
+            prediction.get('love', ''),
+            prediction.get('career', ''),
+            prediction.get('finance', '')
+        ))
+        
+        self.connection.commit()
+        print(f"[DB] Сохранён расклад таро")
+    
+    def get_mood_history(self, limit=20):
+        """
+        Получает историю тестов настроения.
+        """
+        self.cursor.execute('''
+            SELECT date, cat_type, score FROM mood_results
+            ORDER BY date DESC LIMIT ?
+        ''', (limit,))
+        
+        return self.cursor.fetchall()
+    
+    def get_tarot_history(self, limit=20):
+        """
+        Получает историю раскладов таро.
+        """
+        self.cursor.execute('''
+            SELECT date, card1_name, card2_name, card3_name FROM tarot_readings
+            ORDER BY date DESC LIMIT ?
+        ''', (limit,))
+        
+        return self.cursor.fetchall()
+    
+    def get_mood_statistics(self):
+        """
+        Получает статистику по типам котов.
+        """
+        self.cursor.execute('''
+            SELECT cat_type, COUNT(*) as count FROM mood_results
+            GROUP BY cat_type ORDER BY count DESC
+        ''')
+        
+        return self.cursor.fetchall()
+    
+    def close(self):
+        """
+        Закрывает соединение с базой данных.
+        """
+        self.connection.close()
+        print("[DB] Соединение закрыто")
+
+
+# ============================================================
+# ДАННЫЕ ДЛЯ ТЕСТА НАСТРОЕНИЯ
+# ============================================================
+
 QUESTIONS = [
     {
         "text": "Как ты себя чувствуешь прямо сейчас?",
@@ -87,80 +217,56 @@ QUESTIONS = [
     }
 ]
 
-# Типы котов (результаты теста)
-# Каждый тип содержит: название, описание, диапазон баллов (min, max), цвет
-# image_folder - название папки с картинками для этого типа
 CAT_TYPES = [
     {
         "name": "Сонный котик 😴",
         "description": "Сегодня тебе нужен отдых. Позволь себе расслабиться, "
-                       "как кот на мягком пледе. Не требуй от себя слишком многого. "
-                       "Горячий чай, тёплый плед и любимый сериал — вот твой рецепт на сегодня!",
+                       "как кот на мягком пледе. Не требуй от себя слишком многого.",
         "min_score": 5,
         "max_score": 9,
-        "color": "#9E9E9E",  # серый цвет
-        "image_folder": "sleepy"  # папка images/sleepy/
+        "color": "#9E9E9E",
+        "image_folder": "sleepy"
     },
     {
         "name": "Задумчивый кот 🐱",
         "description": "Ты сегодня в созерцательном настроении. Хорошее время "
-                       "для размышлений и планирования. Как кот, который смотрит "
-                       "в окно и думает о важном. Может, стоит записать свои мысли?",
+                       "для размышлений и планирования.",
         "min_score": 10,
         "max_score": 14,
-        "color": "#78909C",  # серо-голубой
-        "image_folder": "thoughtful"  # папка images/thoughtful/
+        "color": "#78909C",
+        "image_folder": "thoughtful"
     },
     {
         "name": "Довольный котик 😺",
         "description": "У тебя хорошее, стабильное настроение! Как кот, который "
-                       "поел и теперь доволен жизнью. Отличный день для обычных дел "
-                       "и маленьких радостей. Мур-мур!",
+                       "поел и теперь доволен жизнью. Мур-мур!",
         "min_score": 15,
         "max_score": 19,
-        "color": "#81C784",  # зелёный
-        "image_folder": "happy"  # папка images/happy/
+        "color": "#81C784",
+        "image_folder": "happy"
     },
     {
         "name": "Игривый кот 😸",
-        "description": "Ты полон энергии и готов к приключениям! Как котёнок, "
-                       "который гоняется за солнечным зайчиком. Отличный день "
+        "description": "Ты полон энергии и готов к приключениям! Отличный день "
                        "для активностей и новых начинаний!",
         "min_score": 20,
         "max_score": 22,
-        "color": "#FFB74D",  # оранжевый
-        "image_folder": "playful"  # папка images/playful/
+        "color": "#FFB74D",
+        "image_folder": "playful"
     },
     {
         "name": "Кот-ураган 🙀",
         "description": "Энергия бьёт через край! Ты как кот в 3 часа ночи — "
-                       "готов свернуть горы и носиться по потолку! Используй "
-                       "эту энергию с умом — сегодня тебе всё по плечу!",
+                       "готов свернуть горы и носиться по потолку!",
         "min_score": 23,
         "max_score": 25,
-        "color": "#FF7043",  # красно-оранжевый
-        "image_folder": "crazy"  # папка images/crazy/
+        "color": "#FF7043",
+        "image_folder": "crazy"
     }
 ]
 
-# ============================================================
-# НАСТРОЙКИ КАРТИНОК
-# ============================================================
-
-import os
-import random
-
-# Папка с картинками (рядом с main.py)
+# Папка с картинками
 IMAGES_FOLDER = "images"
-
-# Соответствие типов котов и папок с картинками
-CAT_IMAGE_FOLDERS = {
-    "sleepy": "sleepy",  # Сонный котик
-    "thoughtful": "thoughtful",  # Задумчивый кот
-    "happy": "happy",  # Довольный котик
-    "playful": "playful",  # Игривый кот
-    "crazy": "crazy"  # Кот-ураган
-}
 
 
 # ============================================================
@@ -169,69 +275,32 @@ CAT_IMAGE_FOLDERS = {
 
 def get_random_local_image(folder_name):
     """
-    Получает путь к случайной картинке из указанной папки.
-
-    Параметры:
-        folder_name - название папки (sleepy, thoughtful, happy, playful, crazy)
-
-    Возвращает:
-        Путь к файлу картинки или None если папка пуста
+    Получает путь к случайной картинке из папки.
     """
-    # Получаем путь к папке со скриптом
     script_dir = os.path.dirname(os.path.abspath(__file__))
-
-    # Полный путь к папке с картинками
     folder_path = os.path.join(script_dir, IMAGES_FOLDER, folder_name)
-
-    print(f"[IMG] Ищу картинки в: {folder_path}")
-
-    # Проверяем, существует ли папка
+    
     if not os.path.exists(folder_path):
         print(f"[IMG] Папка не найдена: {folder_path}")
         return None
-
-    # Получаем список файлов картинок
+    
     image_extensions = ('.jpg', '.jpeg', '.png', '.gif', '.bmp', '.jfif')
-    images = [
-        f for f in os.listdir(folder_path)
-        if f.lower().endswith(image_extensions)
-    ]
-
-    print(f"[IMG] Найдено картинок: {len(images)}")
-
+    images = [f for f in os.listdir(folder_path) if f.lower().endswith(image_extensions)]
+    
     if not images:
-        print(f"[IMG] В папке нет картинок")
         return None
-
-    # Выбираем случайную картинку
+    
     random_image = random.choice(images)
-    full_path = os.path.join(folder_path, random_image)
-
-    print(f"[IMG] Выбрана: {random_image}")
-
-    return full_path
+    return os.path.join(folder_path, random_image)
 
 
 def load_local_image(image_path, max_width=250, max_height=250):
     """
-    Загружает локальное изображение и подготавливает его для Tkinter.
-
-    Параметры:
-        image_path - путь к файлу изображения
-        max_width - максимальная ширина
-        max_height - максимальная высота
-
-    Возвращает:
-        ImageTk.PhotoImage объект или None при ошибке
+    Загружает изображение и подготавливает для Tkinter.
     """
     try:
-        print(f"[IMG] Загружаю файл: {image_path}")
-
-        # Открываем изображение
         image = Image.open(image_path)
-
-        print(f"[IMG] Формат: {image.format}, Размер: {image.size}")
-
+        
         # Конвертируем в RGB
         if image.mode in ('RGBA', 'P', 'LA'):
             background = Image.new('RGB', image.size, (255, 255, 255))
@@ -244,670 +313,898 @@ def load_local_image(image_path, max_width=250, max_height=250):
             image = background
         elif image.mode != 'RGB':
             image = image.convert('RGB')
-
+        
         # Масштабируем
         width, height = image.size
         ratio = min(max_width / width, max_height / height)
-
+        
         if ratio < 1:
             new_width = int(width * ratio)
             new_height = int(height * ratio)
             image = image.resize((new_width, new_height), Image.LANCZOS)
-            print(f"[IMG] Изменён размер: {new_width}x{new_height}")
-
-        photo = ImageTk.PhotoImage(image)
-        print("[IMG] Картинка готова!")
-        return photo
-
-    except Exception as e:
-        print(f"[IMG] Ошибка: {type(e).__name__}: {e}")
-
-    return None
-
-
-# ============================================================
-# КЛАСС ПРИЛОЖЕНИЯ
-# ============================================================
-
-class CatMoodTestApp:
-    """
-    Главный класс приложения.
-    Создаёт окно и управляет всеми экранами теста.
-    """
-
-    def __init__(self):
-        """
-        Конструктор - вызывается при создании объекта.
-        Здесь мы настраиваем главное окно приложения.
-        """
-        # Создаём главное окно
-        self.window = tk.Tk()
-        self.window.title("🐱 Какой ты кот сегодня?")
-        self.window.geometry("600x500")  # ширина x высота в пикселях
-        self.window.configure(bg="#1a1a2e")  # тёмный фон
-
-        # Запрещаем изменять размер окна (чтобы не ломался дизайн)
-        self.window.resizable(False, False)
-
-        # --- Переменные для хранения состояния теста ---
-        self.current_question = 0  # номер текущего вопроса (начинаем с 0)
-        self.total_score = 0  # сумма баллов за ответы
-        self.answers = []  # список ответов пользователя
-
-        # --- Создаём контейнер для содержимого ---
-        # Frame - это как коробка, в которую мы кладём другие элементы
-        self.main_frame = tk.Frame(self.window, bg="#1a1a2e")
-        self.main_frame.pack(fill="both", expand=True, padx=20, pady=20)
-
-        # Показываем стартовый экран
-        self.show_start_screen()
-
-    def clear_screen(self):
-        """
-        Очищает экран - удаляет все элементы из main_frame.
-        Вызываем перед показом нового экрана.
-        """
-        # Проходим по всем дочерним элементам и удаляем их
-        for widget in self.main_frame.winfo_children():
-            widget.destroy()
-
-    def show_start_screen(self):
-        """
-        Показывает стартовый экран с приветствием и кнопкой начала теста.
-        """
-        # Сначала очищаем экран
-        self.clear_screen()
-
-        # --- Заголовок ---
-        title_label = tk.Label(
-            self.main_frame,
-            text="🐱 Какой ты кот сегодня? 🐱",
-            font=("Arial", 24, "bold"),
-            fg="#e94560",  # розовый цвет текста
-            bg="#1a1a2e"  # фон как у родителя
-        )
-        title_label.pack(pady=40)  # pady - отступ сверху и снизу
-
-        # --- Описание ---
-        description = (
-            "Пройди короткий тест из 5 вопросов\n"
-            "и узнай, какой ты кот сегодня!\n\n"
-            "🌙 Это поможет лучше понять своё настроение"
-        )
-        desc_label = tk.Label(
-            self.main_frame,
-            text=description,
-            font=("Arial", 14),
-            fg="#ffffff",
-            bg="#1a1a2e",
-            justify="center"  # выравнивание текста по центру
-        )
-        desc_label.pack(pady=30)
-
-        # --- Кнопка "Начать тест" ---
-        start_button = tk.Button(
-            self.main_frame,
-            text="✨ Начать тест ✨",
-            font=("Arial", 16, "bold"),
-            fg="#ffffff",
-            bg="#e94560",
-            activebackground="#ff6b6b",  # цвет при нажатии
-            activeforeground="#ffffff",
-            width=20,
-            height=2,
-            border=0,
-            cursor="hand2",  # курсор-рука при наведении
-            command=self.start_test  # функция, которая вызовется при клике
-        )
-        start_button.pack(pady=40)
-
-    def start_test(self):
-        """
-        Начинает тест: сбрасывает счётчики и показывает первый вопрос.
-        """
-        # Сбрасываем все переменные
-        self.current_question = 0
-        self.total_score = 0
-        self.answers = []
-
-        # Показываем первый вопрос
-        self.show_question()
-
-    def show_question(self):
-        """
-        Показывает текущий вопрос с вариантами ответов.
-        """
-        self.clear_screen()
-
-        # Получаем данные текущего вопроса из списка
-        question_data = QUESTIONS[self.current_question]
-
-        # --- Прогресс (какой вопрос из скольки) ---
-        progress_text = f"Вопрос {self.current_question + 1} из {len(QUESTIONS)}"
-        progress_label = tk.Label(
-            self.main_frame,
-            text=progress_text,
-            font=("Arial", 12),
-            fg="#a0a0a0",  # серый цвет
-            bg="#1a1a2e"
-        )
-        progress_label.pack(pady=10)
-
-        # --- Прогресс-бар (визуальный) ---
-        # Создаём рамку для прогресс-бара
-        progress_frame = tk.Frame(self.main_frame, bg="#333333", height=10)
-        progress_frame.pack(fill="x", pady=5)
-
-        # Вычисляем ширину заполненной части (в процентах)
-        progress_percent = (self.current_question + 1) / len(QUESTIONS)
-
-        # Создаём заполненную часть прогресс-бара
-        progress_fill = tk.Frame(
-            progress_frame,
-            bg="#e94560",
-            height=10,
-            width=int(560 * progress_percent)  # 560 = ширина окна минус отступы
-        )
-        progress_fill.place(x=0, y=0)
-
-        # --- Текст вопроса ---
-        question_label = tk.Label(
-            self.main_frame,
-            text=question_data["text"],
-            font=("Arial", 18),
-            fg="#ffffff",
-            bg="#1a1a2e",
-            wraplength=500  # перенос текста, если длинный
-        )
-        question_label.pack(pady=30)
-
-        # --- Варианты ответов (кнопки) ---
-        # Проходим по всем вариантам ответа
-        for option in question_data["options"]:
-            # Создаём кнопку для каждого варианта
-            option_button = tk.Button(
-                self.main_frame,
-                text=option["text"],
-                font=("Arial", 12),
-                fg="#ffffff",
-                bg="#16213e",
-                activebackground="#e94560",
-                activeforeground="#ffffff",
-                width=40,
-                height=2,
-                border=0,
-                cursor="hand2",
-                # lambda нужна, чтобы передать score в функцию
-                # без lambda все кнопки передавали бы одинаковый score
-                command=lambda score=option["score"]: self.answer_question(score)
-            )
-            option_button.pack(pady=5)
-
-            # Добавляем эффект при наведении мыши
-            option_button.bind('<Enter>', lambda e, btn=option_button: btn.configure(bg="#e94560"))
-            option_button.bind('<Leave>', lambda e, btn=option_button: btn.configure(bg="#16213e"))
-
-    def answer_question(self, score):
-        """
-        Обрабатывает ответ на вопрос.
-        score - количество баллов за выбранный ответ.
-        """
-        # Добавляем баллы к общему счёту
-        self.total_score += score
-
-        # Сохраняем ответ в список
-        self.answers.append(score)
-
-        # Переходим к следующему вопросу
-        self.current_question += 1
-
-        # Проверяем, есть ли ещё вопросы
-        if self.current_question < len(QUESTIONS):
-            # Показываем следующий вопрос
-            self.show_question()
-        else:
-            # Вопросы закончились - показываем результат
-            self.show_result()
-
-    def get_cat_type(self):
-        """
-        Определяет тип кота по набранным баллам.
-        Возвращает словарь с данными о типе кота.
-        """
-        # Проходим по всем типам котов
-        for cat_type in CAT_TYPES:
-            # Проверяем, попадают ли баллы в диапазон этого типа
-            if cat_type["min_score"] <= self.total_score <= cat_type["max_score"]:
-                return cat_type
-
-        # Если ничего не подошло (не должно случиться), возвращаем первый тип
-        return CAT_TYPES[0]
-
-    def show_result(self):
-        """
-        Показывает результат теста с картинкой кота из API.
-        """
-        self.clear_screen()
-
-        # Определяем тип кота
-        cat_type = self.get_cat_type()
-
-        # --- Заголовок "Твой результат" ---
-        result_title = tk.Label(
-            self.main_frame,
-            text="✨ Твой результат ✨",
-            font=("Arial", 16),
-            fg="#a0a0a0",
-            bg="#1a1a2e"
-        )
-        result_title.pack(pady=10)
-
-        # --- Название типа кота ---
-        cat_name_label = tk.Label(
-            self.main_frame,
-            text=cat_type["name"],
-            font=("Arial", 24, "bold"),
-            fg=cat_type["color"],  # используем цвет из данных
-            bg="#1a1a2e"
-        )
-        cat_name_label.pack(pady=5)
-
-        # --- Баллы ---
-        score_label = tk.Label(
-            self.main_frame,
-            text=f"Твои баллы: {self.total_score} из {len(QUESTIONS) * 5}",
-            font=("Arial", 11),
-            fg="#a0a0a0",
-            bg="#1a1a2e"
-        )
-        score_label.pack(pady=5)
-
-        # --- Загрузка и отображение картинки кота ---
-        # Создаём рамку для картинки
-        image_frame = tk.Frame(self.main_frame, bg="#1a1a2e")
-        image_frame.pack(pady=10)
-
-        # Метка для картинки (сначала показываем текст загрузки)
-        self.image_label = tk.Label(
-            image_frame,
-            text="🐱 Загружаю котика...",
-            font=("Arial", 12),
-            fg="#a0a0a0",
-            bg="#1a1a2e"
-        )
-        self.image_label.pack()
-
-        # Загружаем картинку в отдельном потоке, чтобы интерфейс не зависал
-        # Но для простоты сделаем синхронно (подождём загрузку)
-        self.load_cat_image(cat_type["image_folder"])
-
-        # --- Описание типа ---
-        # Создаём рамку с цветной границей для описания
-        desc_frame = tk.Frame(
-            self.main_frame,
-            bg=cat_type["color"],
-            padx=3,
-            pady=3
-        )
-        desc_frame.pack(pady=10, padx=20, fill="x")
-
-        # Внутренняя часть рамки
-        desc_inner = tk.Frame(desc_frame, bg="#16213e")
-        desc_inner.pack(fill="both", expand=True)
-
-        desc_label = tk.Label(
-            desc_inner,
-            text=cat_type["description"],
-            font=("Arial", 11),
-            fg="#ffffff",
-            bg="#16213e",
-            wraplength=450,
-            justify="center",
-            padx=15,
-            pady=10
-        )
-        desc_label.pack()
-
-        # --- Кнопки ---
-        buttons_frame = tk.Frame(self.main_frame, bg="#1a1a2e")
-        buttons_frame.pack(pady=15)
-
-        # Кнопка "Другой котик" - загружает новую картинку
-        new_cat_button = tk.Button(
-            buttons_frame,
-            text="🔄 Другой котик",
-            font=("Arial", 11),
-            fg="#ffffff",
-            bg="#16213e",
-            activebackground="#e94560",
-            activeforeground="#ffffff",
-            width=14,
-            height=2,
-            border=0,
-            cursor="hand2",
-            command=lambda: self.load_cat_image(cat_type["image_folder"])
-        )
-        new_cat_button.pack(side="left", padx=5)
-
-        retry_button = tk.Button(
-            buttons_frame,
-            text="🔁 Заново",
-            font=("Arial", 11),
-            fg="#ffffff",
-            bg="#16213e",
-            activebackground="#e94560",
-            activeforeground="#ffffff",
-            width=14,
-            height=2,
-            border=0,
-            cursor="hand2",
-            command=self.start_test
-        )
-        retry_button.pack(side="left", padx=5)
-
-        home_button = tk.Button(
-            buttons_frame,
-            text="🏠 На главную",
-            font=("Arial", 11),
-            fg="#ffffff",
-            bg="#16213e",
-            activebackground="#e94560",
-            activeforeground="#ffffff",
-            width=14,
-            height=2,
-            border=0,
-            cursor="hand2",
-            command=self.show_start_screen
-        )
-        home_button.pack(side="left", padx=5)
-
-    def load_cat_image(self, image_folder):
-        """
-        Загружает случайную картинку кота из локальной папки.
-
-        Параметры:
-            image_folder - название папки с картинками (sleepy, happy и т.д.)
-        """
-        self.image_label.config(text="🐱 Ищу котика...", image="")
-
-        self.window.update()
-
-        image_path = get_random_local_image(image_folder)
-
-        if image_path:
-            photo = load_local_image(image_path, max_width=200, max_height=200)
-
-            if photo:
-                self.current_photo = photo
-
-                self.image_label.config(image=photo, text="")
-            else:
-                self.image_label.config(text="😿 Не удалось загрузить картинку")
-        else:
-            self.image_label.config(text="😿 Картинки не найдены\nДобавь в папку images/")
-
-    def run(self):
-        """
-        Запускает приложение.
-        mainloop() - это бесконечный цикл, который ждёт действий пользователя.
-        """
-        self.window.mainloop()
-
-# ============================================================
-# ФУНКЦИИ ПРОВЕРКИ ТАРО
-# ============================================================
-class Deck:
-
-    BASEPATH = 'images/tarot/png/'
-
-    def __init__(self):
-        import json
         
-        with open('markup.json', 'r') as markup_file:
-            markup = json.load(markup_file)
-
-        self.cards = []
-
-        for i in markup:
-            self.cards.append(TarotCard(i['name'], i['id'], self.BASEPATH + i['name'] + '.png'))
+        return ImageTk.PhotoImage(image)
     
-    def pull_card(self):
-        import random
+    except Exception as e:
+        print(f"[IMG] Ошибка: {e}")
+        return None
 
-        card = random.choice(self.cards)
-        self.cards.remove(card)
-        return card
+
+# ============================================================
+# КЛАССЫ ДЛЯ ТАРО
+# ============================================================
 
 class TarotCard:
-
+    """Класс карты таро."""
+    
     def __init__(self, name, value, image_path):
         self.name = name
         self.value = value
         self.image_path = image_path
 
+
+class Deck:
+    """Класс колоды таро."""
+    
+    BASEPATH = 'images/tarot/png/'
+    
+    def __init__(self):
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        markup_path = os.path.join(script_dir, 'markup.json')
+        
+        with open(markup_path, 'r') as markup_file:
+            markup = json.load(markup_file)
+        
+        self.cards = []
+        for i in markup:
+            card_path = os.path.join(script_dir, self.BASEPATH + i['name'] + '.png')
+            self.cards.append(TarotCard(i['name'], i['id'], card_path))
+    
+    def pull_card(self):
+        """Вытягивает случайную карту из колоды."""
+        card = random.choice(self.cards)
+        self.cards.remove(card)
+        return card
+    
+    def reset(self):
+        """Сбрасывает колоду (перезагружает карты)."""
+        self.__init__()
+
+
 def get_prediction(cards):
+    """Получает предсказание от API."""
     import requests
     import base64
+    
+    try:
+        auth = "Basic " + base64.b64encode(
+            "649129:12788919b4c04b4ce2ddd4c31b36260a2aecf2d9".encode()
+        ).decode()
+        
+        r = requests.post(
+            "https://json.astrologyapi.com/v1/tarot_predictions",
+            headers={
+                'Authorization': auth,
+                'Content-Type': 'application/json'
+            },
+            params={
+                'love': cards[0].value,
+                'career': cards[1].value,
+                'finance': cards[2].value
+            },
+            timeout=15
+        )
+        
+        return r.json()
+    except Exception as e:
+        print(f"[API] Ошибка: {e}")
+        # Возвращаем заглушку при ошибке
+        return {
+            'love': 'Не удалось получить предсказание. Попробуйте позже.',
+            'career': 'Не удалось получить предсказание. Попробуйте позже.',
+            'finance': 'Не удалось получить предсказание. Попробуйте позже.'
+        }
 
-    auth = "Basic " + base64.b64encode("649129:12788919b4c04b4ce2ddd4c31b36260a2aecf2d9".encode()).decode()
 
-    r = requests.post("https://json.astrologyapi.com/v1/tarot_predictions", 
-        headers = {
-            'Authorization': auth,
-            'Content-Type': 'application/json'
-        },
-        params = {
-            'love': cards[0].value,
-            'career': cards[1].value,
-            'finance': cards[2].value
-        })
+# ============================================================
+# ГЛАВНОЕ ПРИЛОЖЕНИЕ
+# ============================================================
 
-    return r.json()
-
-class Layout:
-
-    def __init__(self, cards = {}):
-        self.cards = cards
-
-    def append_card(self, theme, card):
-        self.cards[theme] = card
-
-class TarotApp:
-    from PIL import Image, ImageTk
-
+class MainApp:
     """
-    Проверка расклада таро
+    Главное приложение с меню выбора.
     """
-
-    def __init__(self, root):
-        """
-        Конструктор - вызывается при создании объекта.
-        Здесь мы настраиваем главное окно приложения.
-        """
-        self.root = root
-        self.root.title("Расклад таро")
-        self.root.geometry("1000x1000")  
-        self.root.configure(bg="#1a1a2e")  
-
-        self.root.resizable(False, False)
-
-        self.main_frame = tk.Frame(self.root, bg="#1a1a2e")
+    
+    # Цвета интерфейса
+    BG_COLOR = "#1a1a2e"
+    ACCENT_COLOR = "#e94560"
+    BUTTON_COLOR = "#16213e"
+    TEXT_COLOR = "#ffffff"
+    GRAY_COLOR = "#a0a0a0"
+    
+    def __init__(self):
+        # Создаём окно
+        self.window = tk.Tk()
+        self.window.title("🐱 Котогадалка")
+        self.window.geometry("800x600")
+        self.window.configure(bg=self.BG_COLOR)
+        self.window.resizable(False, False)
+        
+        # Инициализируем базу данных
+        self.db = Database()
+        
+        # Главный контейнер
+        self.main_frame = tk.Frame(self.window, bg=self.BG_COLOR)
         self.main_frame.pack(fill="both", expand=True, padx=20, pady=20)
-
-        self.deck = Deck()
-        self.show_start_screen()
-
+        
+        # Переменные для теста
+        self.current_question = 0
+        self.total_score = 0
+        self.answers = []
+        
+        # Переменные для таро
+        self.deck = None
+        self.cards_for_prediction = []
+        self.prediction = {}
+        
+        # Показываем главное меню
+        self.show_main_menu()
+    
     def clear_screen(self):
-        """
-        Очищает экран - удаляет все элементы из main_frame.
-        Вызываем перед показом нового экрана.
-        """
+        """Очищает экран."""
         for widget in self.main_frame.winfo_children():
             widget.destroy()
-
-    def run(self):
-        """
-        Запускает приложение.
-        mainloop() - это бесконечный цикл, который ждёт действий пользователя.
-        """
-        self.root.mainloop()
-
-    def show_start_screen(self):
-        """
-        Главное окно с предложением расклада
-        """
+    
+    # ==================== ГЛАВНОЕ МЕНЮ ====================
+    
+    def show_main_menu(self):
+        """Показывает главное меню."""
         self.clear_screen()
-
-        title_label = tk.Label(
+        
+        # Заголовок
+        title = tk.Label(
             self.main_frame,
-            text="Сделаем расклад таро?",
-            font=("Arial", 24, "bold"),
-            fg="#e94560",  
-            bg="#1a1a2e"  
+            text="🐱 Котогадалка 🐱",
+            font=("Arial", 32, "bold"),
+            fg=self.ACCENT_COLOR,
+            bg=self.BG_COLOR
         )
-        title_label.pack(pady=40)  
-
-        description = (
-            "Попроси разложить карты таро"
-            "и узнай, что тебя ждет в жизни"
-        )
-        desc_label = tk.Label(
+        title.pack(pady=30)
+        
+        # Подзаголовок
+        subtitle = tk.Label(
             self.main_frame,
-            text=description,
+            text="Выбери, что хочешь сделать:",
             font=("Arial", 14),
-            fg="#ffffff",
-            bg="#1a1a2e",
-            justify="center"  
+            fg=self.TEXT_COLOR,
+            bg=self.BG_COLOR
         )
-        desc_label.pack(pady=30)
-
-        # --- Кнопка "Начать тест" ---
-        start_button = tk.Button(
+        subtitle.pack(pady=10)
+        
+        # Кнопки меню
+        buttons_frame = tk.Frame(self.main_frame, bg=self.BG_COLOR)
+        buttons_frame.pack(pady=30)
+        
+        # Кнопка теста настроения
+        mood_btn = tk.Button(
+            buttons_frame,
+            text="😺 Какой ты кот сегодня?",
+            font=("Arial", 14, "bold"),
+            fg=self.TEXT_COLOR,
+            bg=self.ACCENT_COLOR,
+            activebackground="#ff6b6b",
+            width=25,
+            height=2,
+            border=0,
+            cursor="hand2",
+            command=self.start_mood_test
+        )
+        mood_btn.pack(pady=10)
+        
+        # Кнопка таро
+        tarot_btn = tk.Button(
+            buttons_frame,
+            text="🃏 Расклад Таро",
+            font=("Arial", 14, "bold"),
+            fg=self.TEXT_COLOR,
+            bg=self.ACCENT_COLOR,
+            activebackground="#ff6b6b",
+            width=25,
+            height=2,
+            border=0,
+            cursor="hand2",
+            command=self.start_tarot
+        )
+        tarot_btn.pack(pady=10)
+        
+        # Кнопка дневника
+        diary_btn = tk.Button(
+            buttons_frame,
+            text="📔 Мой дневник",
+            font=("Arial", 14, "bold"),
+            fg=self.TEXT_COLOR,
+            bg=self.BUTTON_COLOR,
+            activebackground=self.ACCENT_COLOR,
+            width=25,
+            height=2,
+            border=0,
+            cursor="hand2",
+            command=self.show_diary
+        )
+        diary_btn.pack(pady=10)
+        
+        # Кнопка статистики
+        stats_btn = tk.Button(
+            buttons_frame,
+            text="📊 Статистика",
+            font=("Arial", 14, "bold"),
+            fg=self.TEXT_COLOR,
+            bg=self.BUTTON_COLOR,
+            activebackground=self.ACCENT_COLOR,
+            width=25,
+            height=2,
+            border=0,
+            cursor="hand2",
+            command=self.show_statistics
+        )
+        stats_btn.pack(pady=10)
+    
+    # ==================== ТЕСТ НАСТРОЕНИЯ ====================
+    
+    def start_mood_test(self):
+        """Начинает тест настроения."""
+        self.current_question = 0
+        self.total_score = 0
+        self.answers = []
+        self.show_mood_question()
+    
+    def show_mood_question(self):
+        """Показывает вопрос теста."""
+        self.clear_screen()
+        
+        question_data = QUESTIONS[self.current_question]
+        
+        # Прогресс
+        progress_text = f"Вопрос {self.current_question + 1} из {len(QUESTIONS)}"
+        progress_label = tk.Label(
             self.main_frame,
-            text="✨ Начать расклад ✨",
+            text=progress_text,
+            font=("Arial", 12),
+            fg=self.GRAY_COLOR,
+            bg=self.BG_COLOR
+        )
+        progress_label.pack(pady=10)
+        
+        # Прогресс-бар
+        progress_frame = tk.Frame(self.main_frame, bg="#333333", height=10)
+        progress_frame.pack(fill="x", pady=5)
+        
+        progress_percent = (self.current_question + 1) / len(QUESTIONS)
+        progress_fill = tk.Frame(progress_frame, bg=self.ACCENT_COLOR, height=10,
+                                  width=int(760 * progress_percent))
+        progress_fill.place(x=0, y=0)
+        
+        # Вопрос
+        question_label = tk.Label(
+            self.main_frame,
+            text=question_data["text"],
+            font=("Arial", 18),
+            fg=self.TEXT_COLOR,
+            bg=self.BG_COLOR,
+            wraplength=600
+        )
+        question_label.pack(pady=30)
+        
+        # Варианты ответов
+        for option in question_data["options"]:
+            btn = tk.Button(
+                self.main_frame,
+                text=option["text"],
+                font=("Arial", 12),
+                fg=self.TEXT_COLOR,
+                bg=self.BUTTON_COLOR,
+                activebackground=self.ACCENT_COLOR,
+                width=45,
+                height=2,
+                border=0,
+                cursor="hand2",
+                command=lambda s=option["score"]: self.answer_mood_question(s)
+            )
+            btn.pack(pady=5)
+            btn.bind('<Enter>', lambda e, b=btn: b.configure(bg=self.ACCENT_COLOR))
+            btn.bind('<Leave>', lambda e, b=btn: b.configure(bg=self.BUTTON_COLOR))
+    
+    def answer_mood_question(self, score):
+        """Обрабатывает ответ на вопрос."""
+        self.total_score += score
+        self.answers.append(score)
+        self.current_question += 1
+        
+        if self.current_question < len(QUESTIONS):
+            self.show_mood_question()
+        else:
+            self.show_mood_result()
+    
+    def get_cat_type(self):
+        """Определяет тип кота по баллам."""
+        for cat_type in CAT_TYPES:
+            if cat_type["min_score"] <= self.total_score <= cat_type["max_score"]:
+                return cat_type
+        return CAT_TYPES[0]
+    
+    def show_mood_result(self):
+        """Показывает результат теста."""
+        self.clear_screen()
+        
+        cat_type = self.get_cat_type()
+        
+        # Сохраняем в базу данных
+        self.db.save_mood_result(cat_type["name"], self.total_score, self.answers)
+        
+        # Заголовок
+        tk.Label(
+            self.main_frame,
+            text="✨ Твой результат ✨",
+            font=("Arial", 16),
+            fg=self.GRAY_COLOR,
+            bg=self.BG_COLOR
+        ).pack(pady=10)
+        
+        # Тип кота
+        tk.Label(
+            self.main_frame,
+            text=cat_type["name"],
+            font=("Arial", 24, "bold"),
+            fg=cat_type["color"],
+            bg=self.BG_COLOR
+        ).pack(pady=5)
+        
+        # Баллы
+        tk.Label(
+            self.main_frame,
+            text=f"Баллы: {self.total_score} из {len(QUESTIONS) * 5}",
+            font=("Arial", 11),
+            fg=self.GRAY_COLOR,
+            bg=self.BG_COLOR
+        ).pack(pady=5)
+        
+        # Картинка
+        image_frame = tk.Frame(self.main_frame, bg=self.BG_COLOR)
+        image_frame.pack(pady=10)
+        
+        self.image_label = tk.Label(image_frame, bg=self.BG_COLOR)
+        self.image_label.pack()
+        self.load_cat_image(cat_type["image_folder"])
+        
+        # Описание
+        desc_frame = tk.Frame(self.main_frame, bg=cat_type["color"], padx=3, pady=3)
+        desc_frame.pack(pady=10, padx=20, fill="x")
+        
+        desc_inner = tk.Frame(desc_frame, bg=self.BUTTON_COLOR)
+        desc_inner.pack(fill="both", expand=True)
+        
+        tk.Label(
+            desc_inner,
+            text=cat_type["description"],
+            font=("Arial", 11),
+            fg=self.TEXT_COLOR,
+            bg=self.BUTTON_COLOR,
+            wraplength=500,
+            justify="center",
+            padx=15,
+            pady=10
+        ).pack()
+        
+        # Кнопки
+        buttons_frame = tk.Frame(self.main_frame, bg=self.BG_COLOR)
+        buttons_frame.pack(pady=15)
+        
+        tk.Button(
+            buttons_frame,
+            text="🔄 Другой котик",
+            font=("Arial", 11),
+            fg=self.TEXT_COLOR,
+            bg=self.BUTTON_COLOR,
+            width=14,
+            height=2,
+            border=0,
+            cursor="hand2",
+            command=lambda: self.load_cat_image(cat_type["image_folder"])
+        ).pack(side="left", padx=5)
+        
+        tk.Button(
+            buttons_frame,
+            text="🔁 Заново",
+            font=("Arial", 11),
+            fg=self.TEXT_COLOR,
+            bg=self.BUTTON_COLOR,
+            width=14,
+            height=2,
+            border=0,
+            cursor="hand2",
+            command=self.start_mood_test
+        ).pack(side="left", padx=5)
+        
+        tk.Button(
+            buttons_frame,
+            text="🏠 Меню",
+            font=("Arial", 11),
+            fg=self.TEXT_COLOR,
+            bg=self.BUTTON_COLOR,
+            width=14,
+            height=2,
+            border=0,
+            cursor="hand2",
+            command=self.show_main_menu
+        ).pack(side="left", padx=5)
+    
+    def load_cat_image(self, folder):
+        """Загружает картинку кота."""
+        image_path = get_random_local_image(folder)
+        
+        if image_path:
+            photo = load_local_image(image_path, 180, 180)
+            if photo:
+                self.current_photo = photo
+                self.image_label.config(image=photo, text="")
+            else:
+                self.image_label.config(text="😿 Не удалось загрузить", image="")
+        else:
+            self.image_label.config(text="😿 Картинки не найдены\nДобавь в images/", image="")
+    
+    # ==================== ТАРО ====================
+    
+    def start_tarot(self):
+        """Начинает расклад таро."""
+        self.clear_screen()
+        self.deck = Deck()
+        
+        # Заголовок
+        tk.Label(
+            self.main_frame,
+            text="🃏 Расклад Таро 🃏",
+            font=("Arial", 24, "bold"),
+            fg=self.ACCENT_COLOR,
+            bg=self.BG_COLOR
+        ).pack(pady=20)
+        
+        tk.Label(
+            self.main_frame,
+            text="Нажми кнопку, чтобы вытянуть три карты\nи узнать, что тебя ждёт",
+            font=("Arial", 14),
+            fg=self.TEXT_COLOR,
+            bg=self.BG_COLOR,
+            justify="center"
+        ).pack(pady=20)
+        
+        tk.Button(
+            self.main_frame,
+            text="✨ Вытянуть карты ✨",
             font=("Arial", 16, "bold"),
-            fg="#ffffff",
-            bg="#e94560",
-            activebackground="#ff6b6b",  
-            activeforeground="#ffffff",
+            fg=self.TEXT_COLOR,
+            bg=self.ACCENT_COLOR,
             width=20,
             height=2,
             border=0,
-            cursor="hand2",  
-            command=self.start_test  
-        )
-        start_button.pack(pady=40)  
+            cursor="hand2",
+            command=self.draw_tarot_cards
+        ).pack(pady=30)
+        
+        tk.Button(
+            self.main_frame,
+            text="🏠 Вернуться в меню",
+            font=("Arial", 12),
+            fg=self.TEXT_COLOR,
+            bg=self.BUTTON_COLOR,
+            width=20,
+            height=2,
+            border=0,
+            cursor="hand2",
+            command=self.show_main_menu
+        ).pack(pady=10)
     
-    def start_test(self):
+    def draw_tarot_cards(self):
+        """Вытягивает карты и показывает результат."""
         self.clear_screen()
-
-        self.canvas = tk.Canvas(self.main_frame, bg="#1a1a2e", highlightthickness=0, borderwidth=0, relief='flat')
+        
+        # Создаём Canvas для карт
+        self.canvas = tk.Canvas(
+            self.main_frame, 
+            bg=self.BG_COLOR, 
+            highlightthickness=0,
+            width=760,
+            height=520
+        )
         self.canvas.pack(fill=tk.BOTH, expand=True)
         
-        img = Image.open('./images/tarot/png/back.png')
-        img = img.resize((200, 378), Image.Resampling.LANCZOS)
-        self.deck_img = ImageTk.PhotoImage(img)
-        self.deck_draw = self.canvas.create_image(150, 200, image=self.deck_img)
-
-        self.card_images = {}  
+        # Вытягиваем 3 карты
+        self.card_images = {}
         self.cards_for_prediction = []
         
-        for i in range(1, 4):
-            drawn_card = self.deck.pull_card()
-            self.cards_for_prediction.append(drawn_card)
-
-            img = Image.open(drawn_card.image_path)
-            img = img.resize((200, 378), Image.Resampling.LANCZOS)
-            card_img = ImageTk.PhotoImage(img)
+        for i in range(3):
+            card = self.deck.pull_card()
+            self.cards_for_prediction.append(card)
             
-            self.card_images[f"card_{i}"] = card_img  
-            self.canvas.create_image(i * 200 + 50 * i, 600, image=card_img)
-
+            try:
+                img = Image.open(card.image_path)
+                img = img.resize((150, 280), Image.LANCZOS)
+                card_img = ImageTk.PhotoImage(img)
+                
+                self.card_images[f"card_{i}"] = card_img
+                x_pos = 130 + i * 250
+                self.canvas.create_image(x_pos, 160, image=card_img)
+                
+                # Подпись карты
+                self.canvas.create_text(
+                    x_pos, 320,
+                    text=card.name.replace("_", " ").title(),
+                    fill=self.TEXT_COLOR,
+                    font=("Arial", 10)
+                )
+            except Exception as e:
+                print(f"[IMG] Ошибка загрузки карты: {e}")
         
-        self.prediction = get_prediction((self.cards_for_prediction))
-        # Для тестирования
-        # self.prediction = {'love': 'The singles and eligible may find love interest at their work place. You may be attracted to a married person who may not reveal his marital status to you. Some background search will help. You may come across someone you will seem to be a perfect match for you; who will revere you and respect you for who you are. This may prove to be a very passionate phase in your love life. Emotions shall be on a roller coaster; desires and urges shall climax.  Your love feelings shall be positively reciprocated in a big way! If you have been facing problems in your relationships, today is the day to use your communicative skills effectively and clear all differences. Your soothing words will bring the other person around to see and understand your point of view. You may look to introduce some fun elements in your relationship. You can plan an adventurous trip to an exotic place or indulge in some energetic, outdoor sports such as paragliding. You can set out to explore new unvisited places of interest. Be careful not to be so lost in your love life that you ignore other important aspect of your life.', 'career': 'Time is ripe to put your best foot forward. Your ambitious and farsighted vision will help you achieve your goals today. You shall come up with decisive suggestions which will have long term impact. Many possibilities will open up before you. You shall be able to make the right choices with a clear mind and a positive self-righteousness. You will come across as a creative and formidable force. You will come across as creative, passionate and energetic person. You may be offered a new job or increased responsibilities today. You shall get ample opportunities to prove your work capabilities. You will make outstanding progress at work and win accolades and promotions. Those who are stuck up in a stagnant job may decide to opt out and look for more challenging openings. If you have been thinking to be self-employed, then this may turn out to be just the right career choice for you. It is time to implement any new business strategy you might have and take control of your business dealings. You shall benefit from the advice given by an experienced person. Explore your options, dream big and try new things, but remember, you shall alone be responsible and accountable for your actions and decisions.', 'finance': 'This may be an exceptionally rewarding and profitable period for you. A new job may be offered to you. You may get a chance to work with an experienced person who will mentor you in the new occupation. You would be able to learn many new tricks of trade from him. You shall get enough opportunities prove your mettle in your area of expertise. You shall be able to complete your assignments successfully and this may find expression in form of a promotion or elevated status. You are all set to take risks and invest in ventures which you think will yield you abundant returns. In case you are facing a financial crunch, you may look out for an additional source or means of earning income. It might as well be trading or commission related work. Any work which gives you monetary freedom is fine to you. A newly discovered talent can be put to professional practice. A windfall gain is possible. Freshers from college may decide to venture into business. Businessmen may come up with new offers to attract customers and thereby increase their sales and revenues. You may proceed with new projects, fresh investments, etc.'}
-
+        # Получаем предсказание
+        self.canvas.create_text(
+            380, 360,
+            text="⏳ Получаю предсказание...",
+            fill=self.GRAY_COLOR,
+            font=("Arial", 12)
+        )
+        self.window.update()
+        
+        self.prediction = get_prediction(self.cards_for_prediction)
+        
+        # Сохраняем в базу данных
+        self.db.save_tarot_reading(self.cards_for_prediction, self.prediction)
+        
+        # Текстовое поле для предсказания
         self.text_widget = tk.Text(
             self.canvas,
-            height=20,
-            width=70,
+            height=6,
+            width=80,
             wrap="word",
-            bg="#1a1a2e",
-            fg="white"
+            bg=self.BUTTON_COLOR,
+            fg=self.TEXT_COLOR,
+            font=("Arial", 10)
         )
-
-        self.text_window = self.canvas.create_window(550, 190, window=self.text_widget)
-
-        button_frame = tk.Frame(self.canvas, bg="#1a1a2e")
+        self.canvas.create_window(380, 400, window=self.text_widget)
+        self.text_widget.insert("1.0", "Выбери тему предсказания ниже...")
+        self.text_widget.config(state="disabled")
+        
+        # Кнопки тем
+        button_frame = tk.Frame(self.canvas, bg=self.BG_COLOR)
+        
+        tk.Button(
+            button_frame,
+            text="❤️ Любовь",
+            font=("Arial", 11),
+            fg=self.TEXT_COLOR,
+            bg=self.ACCENT_COLOR,
+            width=12,
+            height=2,
+            border=0,
+            command=lambda: self.show_prediction('love')
+        ).pack(side="left", padx=10)
+        
+        tk.Button(
+            button_frame,
+            text="💼 Карьера",
+            font=("Arial", 11),
+            fg=self.TEXT_COLOR,
+            bg=self.ACCENT_COLOR,
+            width=12,
+            height=2,
+            border=0,
+            command=lambda: self.show_prediction('career')
+        ).pack(side="left", padx=10)
+        
+        tk.Button(
+            button_frame,
+            text="💰 Финансы",
+            font=("Arial", 11),
+            fg=self.TEXT_COLOR,
+            bg=self.ACCENT_COLOR,
+            width=12,
+            height=2,
+            border=0,
+            command=lambda: self.show_prediction('finance')
+        ).pack(side="left", padx=10)
+        
+        tk.Button(
+            button_frame,
+            text="🏠 Меню",
+            font=("Arial", 11),
+            fg=self.TEXT_COLOR,
+            bg=self.BUTTON_COLOR,
+            width=12,
+            height=2,
+            border=0,
+            command=self.show_main_menu
+        ).pack(side="left", padx=10)
+        
+        self.canvas.create_window(380, 490, window=button_frame)
     
-        # Создаем кнопки внутри Frame
-        button1 = tk.Button(
-            button_frame,
-            text="Что меня ждет в личной жизни?",
-            font=("Arial", 12, "bold"),
-            fg="#ffffff",
-            bg="#e94560",
-            width=15,
-            height=2,
-            command=lambda: self.update_text(self.prediction['love']),
-            justify="center",
-            wraplength=150
-        )
+    def show_prediction(self, topic):
+        """Показывает предсказание по выбранной теме."""
+        text = self.prediction.get(topic, "Предсказание недоступно")
         
-        button2 = tk.Button(
-            button_frame,
-            text="Что меня ждет в карьере?",
-            font=("Arial", 12, "bold"),
-            fg="#ffffff",
-            bg="#e94560",
-            width=15,
-            height=2,
-            command=lambda: self.update_text(self.prediction['career']),
-            justify="center",
-            wraplength=150
-        )
-        
-        button3 = tk.Button(
-            button_frame,
-            text="Что меня ждет в финансах?",
-            font=("Arial", 12, "bold"),
-            fg="#ffffff",
-            bg="#e94560",
-            width=15,
-            height=2,
-            command=lambda: self.update_text(self.prediction['finance']),
-            justify="center",
-            wraplength=150
-        )
-        
-        button1.pack(side="left", padx=45, pady=5)
-        button2.pack(side="left", padx=45, pady=5)
-        button3.pack(side="left", padx=45, pady=5)
-
-        self.button_frame_window = self.canvas.create_window(
-            500,      
-            850,    
-            window=button_frame
-        )
-
-
-    def update_text(self, new_text):
         self.text_widget.config(state="normal")
         self.text_widget.delete("1.0", "end")
-        self.text_widget.insert("1.0", new_text)
+        self.text_widget.insert("1.0", text)
         self.text_widget.config(state="disabled")
+    
+    # ==================== ДНЕВНИК ====================
+    
+    def show_diary(self):
+        """Показывает дневник с историей."""
+        self.clear_screen()
+        
+        # Заголовок
+        tk.Label(
+            self.main_frame,
+            text="📔 Мой дневник",
+            font=("Arial", 24, "bold"),
+            fg=self.ACCENT_COLOR,
+            bg=self.BG_COLOR
+        ).pack(pady=15)
+        
+        # Создаём вкладки
+        tabs_frame = tk.Frame(self.main_frame, bg=self.BG_COLOR)
+        tabs_frame.pack(pady=10)
+        
+        tk.Button(
+            tabs_frame,
+            text="😺 Тесты настроения",
+            font=("Arial", 11),
+            fg=self.TEXT_COLOR,
+            bg=self.ACCENT_COLOR,
+            width=18,
+            height=2,
+            border=0,
+            command=self.show_mood_diary
+        ).pack(side="left", padx=5)
+        
+        tk.Button(
+            tabs_frame,
+            text="🃏 Расклады таро",
+            font=("Arial", 11),
+            fg=self.TEXT_COLOR,
+            bg=self.BUTTON_COLOR,
+            width=18,
+            height=2,
+            border=0,
+            command=self.show_tarot_diary
+        ).pack(side="left", padx=5)
+        
+        # Контейнер для истории
+        self.diary_container = tk.Frame(self.main_frame, bg=self.BG_COLOR)
+        self.diary_container.pack(fill="both", expand=True, pady=10)
+        
+        # Показываем историю тестов по умолчанию
+        self.show_mood_diary()
+        
+        # Кнопка назад
+        tk.Button(
+            self.main_frame,
+            text="🏠 Вернуться в меню",
+            font=("Arial", 12),
+            fg=self.TEXT_COLOR,
+            bg=self.BUTTON_COLOR,
+            width=20,
+            height=2,
+            border=0,
+            cursor="hand2",
+            command=self.show_main_menu
+        ).pack(pady=10)
+    
+    def show_mood_diary(self):
+        """Показывает историю тестов настроения."""
+        for widget in self.diary_container.winfo_children():
+            widget.destroy()
+        
+        history = self.db.get_mood_history(15)
+        
+        if not history:
+            tk.Label(
+                self.diary_container,
+                text="Пока нет записей.\nПройди тест, чтобы появилась история!",
+                font=("Arial", 12),
+                fg=self.GRAY_COLOR,
+                bg=self.BG_COLOR
+            ).pack(pady=50)
+            return
+        
+        # Создаём список с прокруткой
+        canvas = tk.Canvas(self.diary_container, bg=self.BG_COLOR, highlightthickness=0)
+        scrollbar = tk.Scrollbar(self.diary_container, orient="vertical", command=canvas.yview)
+        scrollable_frame = tk.Frame(canvas, bg=self.BG_COLOR)
+        
+        scrollable_frame.bind(
+            "<Configure>",
+            lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
+        )
+        
+        canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+        canvas.configure(yscrollcommand=scrollbar.set)
+        
+        for date, cat_type, score in history:
+            entry_frame = tk.Frame(scrollable_frame, bg=self.BUTTON_COLOR, padx=10, pady=8)
+            entry_frame.pack(fill="x", pady=3, padx=10)
+            
+            # Форматируем дату
+            try:
+                dt = datetime.strptime(date, "%Y-%m-%d %H:%M:%S")
+                date_str = dt.strftime("%d.%m.%Y %H:%M")
+            except:
+                date_str = date
+            
+            tk.Label(
+                entry_frame,
+                text=f"📅 {date_str}",
+                font=("Arial", 10),
+                fg=self.GRAY_COLOR,
+                bg=self.BUTTON_COLOR
+            ).pack(anchor="w")
+            
+            tk.Label(
+                entry_frame,
+                text=f"{cat_type} — {score} баллов",
+                font=("Arial", 12, "bold"),
+                fg=self.TEXT_COLOR,
+                bg=self.BUTTON_COLOR
+            ).pack(anchor="w")
+        
+        canvas.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
+    
+    def show_tarot_diary(self):
+        """Показывает историю раскладов таро."""
+        for widget in self.diary_container.winfo_children():
+            widget.destroy()
+        
+        history = self.db.get_tarot_history(15)
+        
+        if not history:
+            tk.Label(
+                self.diary_container,
+                text="Пока нет раскладов.\nСделай расклад, чтобы появилась история!",
+                font=("Arial", 12),
+                fg=self.GRAY_COLOR,
+                bg=self.BG_COLOR
+            ).pack(pady=50)
+            return
+        
+        # Создаём список с прокруткой
+        canvas = tk.Canvas(self.diary_container, bg=self.BG_COLOR, highlightthickness=0)
+        scrollbar = tk.Scrollbar(self.diary_container, orient="vertical", command=canvas.yview)
+        scrollable_frame = tk.Frame(canvas, bg=self.BG_COLOR)
+        
+        scrollable_frame.bind(
+            "<Configure>",
+            lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
+        )
+        
+        canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+        canvas.configure(yscrollcommand=scrollbar.set)
+        
+        for date, card1, card2, card3 in history:
+            entry_frame = tk.Frame(scrollable_frame, bg=self.BUTTON_COLOR, padx=10, pady=8)
+            entry_frame.pack(fill="x", pady=3, padx=10)
+            
+            try:
+                dt = datetime.strptime(date, "%Y-%m-%d %H:%M:%S")
+                date_str = dt.strftime("%d.%m.%Y %H:%M")
+            except:
+                date_str = date
+            
+            tk.Label(
+                entry_frame,
+                text=f"📅 {date_str}",
+                font=("Arial", 10),
+                fg=self.GRAY_COLOR,
+                bg=self.BUTTON_COLOR
+            ).pack(anchor="w")
+            
+            cards_text = f"🃏 {card1.replace('_', ' ')}, {card2.replace('_', ' ')}, {card3.replace('_', ' ')}"
+            tk.Label(
+                entry_frame,
+                text=cards_text,
+                font=("Arial", 11),
+                fg=self.TEXT_COLOR,
+                bg=self.BUTTON_COLOR,
+                wraplength=600
+            ).pack(anchor="w")
+        
+        canvas.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
+    
+    # ==================== СТАТИСТИКА ====================
+    
+    def show_statistics(self):
+        """Показывает статистику."""
+        self.clear_screen()
+        
+        # Заголовок
+        tk.Label(
+            self.main_frame,
+            text="📊 Статистика",
+            font=("Arial", 24, "bold"),
+            fg=self.ACCENT_COLOR,
+            bg=self.BG_COLOR
+        ).pack(pady=20)
+        
+        # Получаем статистику
+        stats = self.db.get_mood_statistics()
+        
+        if not stats:
+            tk.Label(
+                self.main_frame,
+                text="Пока нет данных для статистики.\nПройди несколько тестов!",
+                font=("Arial", 14),
+                fg=self.GRAY_COLOR,
+                bg=self.BG_COLOR
+            ).pack(pady=50)
+        else:
+            tk.Label(
+                self.main_frame,
+                text="Твои типы котов:",
+                font=("Arial", 14),
+                fg=self.TEXT_COLOR,
+                bg=self.BG_COLOR
+            ).pack(pady=10)
+            
+            # Показываем статистику
+            total = sum(count for _, count in stats)
+            
+            for cat_type, count in stats:
+                percent = int(count / total * 100)
+                
+                stat_frame = tk.Frame(self.main_frame, bg=self.BG_COLOR)
+                stat_frame.pack(fill="x", padx=50, pady=5)
+                
+                tk.Label(
+                    stat_frame,
+                    text=f"{cat_type}: {count} раз ({percent}%)",
+                    font=("Arial", 12),
+                    fg=self.TEXT_COLOR,
+                    bg=self.BG_COLOR,
+                    anchor="w"
+                ).pack(side="left")
+                
+                # Простой бар
+                bar_frame = tk.Frame(stat_frame, bg="#333333", height=20, width=200)
+                bar_frame.pack(side="right", padx=10)
+                bar_frame.pack_propagate(False)
+                
+                fill_width = int(200 * count / max(c for _, c in stats))
+                bar_fill = tk.Frame(bar_frame, bg=self.ACCENT_COLOR, height=20, width=fill_width)
+                bar_fill.place(x=0, y=0)
+        
+        # Кнопка назад
+        tk.Button(
+            self.main_frame,
+            text="🏠 Вернуться в меню",
+            font=("Arial", 12),
+            fg=self.TEXT_COLOR,
+            bg=self.BUTTON_COLOR,
+            width=20,
+            height=2,
+            border=0,
+            cursor="hand2",
+            command=self.show_main_menu
+        ).pack(pady=30)
+    
+    def run(self):
+        """Запускает приложение."""
+        self.window.mainloop()
+        self.db.close()
+
+
 # ============================================================
-# ТОЧКА ВХОДА В ПРОГРАММУ
+# ТОЧКА ВХОДА
 # ============================================================
 
-# Эта проверка нужна, чтобы код ниже выполнялся только при запуске файла напрямую
-# (а не при импорте в другой файл)
 if __name__ == "__main__":
-    # Создаём экземпляр приложения
-    # app = CatMoodTestApp()
-    root = tk.Tk()
-    app = TarotApp(root)
-
-    # Запускаем приложение
+    app = MainApp()
     app.run()
